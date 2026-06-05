@@ -64,16 +64,25 @@ Step 2 — Clone the framework (used as the offline fallback)
 Verify the folder ~/Developer/Framework Vers1/skills/ exists.
 
 Step 3 — Write my CLAUDE.md
-Create ~/.claude/CLAUDE.md with the "Working with Ted" content Scott provides
-(separate file). This replaces my old engineering-playbook version.
+Replace my old engineering-playbook version with the current "Working with Ted"
+file from this repo:
+  mkdir -p ~/.claude
+  curl -fsSL https://raw.githubusercontent.com/scoots31/han-solo-plugin/main/working-with-ted.md -o ~/.claude/CLAUDE.md
+Verify: head -1 ~/.claude/CLAUDE.md  (should read "# Working with Ted")
 
-Step 4 — Confirm prerequisites, then hand back to me for the plugin
+Step 4 — Remove MemPalace (retired)
+It's no longer used. Uninstall the package and remove any leftover references:
+  pip3 uninstall -y mempalace 2>/dev/null || true
+(My new CLAUDE.md already has no MemPalace routing, so replacing it in Step 3
+clears the rest.)
+
+Step 5 — Confirm prerequisites, then hand back to me for the plugin
 Verify: git --version, python3 --version, node --version, and that
 ~/.claude/CLAUDE.md and ~/Developer/Framework Vers1/skills/ both exist.
-Then tell me: "Prerequisites ready — now run the two /plugin commands in Step 5."
+Then tell me: "Prerequisites ready — now run the two /plugin commands in Step 6."
 ```
 
-### Step 5 — Install the plugin (you type these yourself)
+### Step 6 — Install the plugin (you type these yourself)
 
 Plugin commands are typed directly into Claude Code, not run by Claude. In the
 Claude Code prompt:
@@ -86,7 +95,7 @@ Claude Code prompt:
 Then **restart Claude Code** so the hook and the server load with your token in
 the environment.
 
-### Step 6 — Verify it's actually working
+### Step 7 — Verify it's actually working
 
 Start a new Claude Code session in WSL and check:
 
