@@ -1,0 +1,8 @@
+{
+  "name": "han-solo-connector",
+  "version": "1.0.0",
+  "description": "Han Solo framework connector — injects always-on framework context on every message and registers the Han Solo server (Ren, T4, tools). Per-user token via the HAN_SOLO_TOKEN environment variable.",
+  "author": {
+    "name": "Scott Heinemeier"
+  }
+}

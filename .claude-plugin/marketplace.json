@@ -1,0 +1,13 @@
+{
+  "name": "han-solo",
+  "owner": {
+    "name": "Scott Heinemeier"
+  },
+  "plugins": [
+    {
+      "name": "han-solo-connector",
+      "source": "./",
+      "description": "Han Solo framework connector — always-on context injection + Han Solo server (Ren, T4, tools) via MCP."
+    }
+  ]
+}

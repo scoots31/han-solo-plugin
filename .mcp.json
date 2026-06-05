@@ -1,0 +1,11 @@
+{
+  "mcpServers": {
+    "han-solo": {
+      "type": "http",
+      "url": "https://han-solo-mcp.onrender.com/mcp",
+      "headers": {
+        "Authorization": "Bearer ${HAN_SOLO_TOKEN}"
+      }
+    }
+  }
+}
