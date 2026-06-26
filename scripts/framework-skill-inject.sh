@@ -93,7 +93,7 @@ fetch_skill() {
     fi
     curl -sf --max-time 5 \
         -H "Authorization: Bearer $han_solo_token" \
-        "$han_solo_url/api/skills/$slug" \
+        "$han_solo_url/api/framework/skills/$slug" \
         | /usr/bin/python3 -c "
 import sys, json
 try:
