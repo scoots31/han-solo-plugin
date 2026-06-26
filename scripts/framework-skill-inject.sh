@@ -1,28 +1,36 @@
-#!/bin/bash
-# UserPromptSubmit hook — framework skill injection (plugin port)
+#!/bin/zsh
+# UserPromptSubmit hook — DB-driven framework injection (SL-B1)
 #
-# Fires before every user message. Injects two things:
-#   1. Always-on  — output contract / framework context (unconditional)
-#   2. Phase skill — full content of the current phase skill, when a project
-#                    folder declares one (cloud-first, local-file fallback)
+# Fires before every user message. All framework instruction content comes from
+# the Han Solo Framework DB over HTTP — there is NO local instruction file and NO
+# local fallback. The only local inputs are framework-config.json (url + token)
+# and, for phase content, the framework marker file.
 #
-# This is the PLUGIN version of the connector. Differences from the original
-# local hook:
-#   - bash, not zsh (WSL2-safe)
-#   - paths resolved via ${CLAUDE_PLUGIN_ROOT} (no hardcoded home dir)
-#   - token read from $HAN_SOLO_TOKEN env var (no plaintext config file)
-#   - Ren re-anchor block removed — collaborators talk to the real Ren via MCP
+# Injection layers:
+#   1. Always-on   — the framework output contract, fetched from the DB
+#                    (project_slug='default', content_type='always-on') and
+#                    injected UNCONDITIONALLY on every message, before any early
+#                    exit. Factory/no-marker sessions still get it.
+#   2. Phase       — marker-gated, BUILT-BUT-DORMANT until Workstream C. When the
+#                    marker file ~/.claude/framework-active is present and
+#                    non-empty, its CONTENTS are the project_slug; the hook then
+#                    fetches that project's current-phase content and the phase
+#                    skill from the DB. No marker (the normal/factory case) = no
+#                    phase injection. There is no marker-SETTER yet (Workstream C),
+#                    so in normal operation this branch never fires.
 #
-# Tier selection for phase skills (checked in order):
-#   Cloud — han-solo server /api/skills/{slug} with $HAN_SOLO_TOKEN (5s timeout)
-#   File  — $FRAMEWORK_DIR/skills/{slug}/SKILL.md (fallback)
+# Fail-loud, never local: if the DB is reachable but returns nothing for a phase
+# fetch, the hook emits a VISIBLE notice rather than silently catting a local
+# SKILL.md (the old Framework-Vers1 fallback is removed). If the DB is unreachable
+# entirely (curl fails), it degrades to injecting nothing for that layer — never
+# blocking the message.
 #
+# Shell: zsh. Token + url: framework-config.json (han_solo_url + han_solo_token).
 # Debug log: ~/.claude/hook-debug.log — one line per run, overwrites each session.
-# Exits 0 in all cases — never blocks message delivery.
+# Exits 0 in ALL cases — never blocks message delivery.
 
-ALWAYS_ON="${CLAUDE_PLUGIN_ROOT}/framework-always-on.md"
-FRAMEWORK_DIR="${FRAMEWORK_DIR:-$HOME/Developer/Framework Vers1}"
-HAN_SOLO_URL="https://han-solo-mcp.onrender.com"
+CONFIG="$HOME/.claude/hooks/framework-config.json"
+MARKER="$HOME/.claude/framework-active"
 DEBUG_LOG="$HOME/.claude/hook-debug.log"
 
 input=$(cat)
@@ -31,92 +39,42 @@ input=$(cat)
 timestamp=$(date '+%Y-%m-%d %H:%M:%S')
 debug_always_on="no"
 debug_phase="none"
-debug_tier="none"
+debug_phase_tier="none"
 
-# Extract cwd from UserPromptSubmit input JSON
-cwd=$(/usr/bin/python3 -c "
+# --- Read url + token from framework-config.json ---
+han_solo_url=""
+han_solo_token=""
+if [[ -f "$CONFIG" ]]; then
+    han_solo_url=$(/usr/bin/python3 -c "
 import sys, json
 try:
-    data = json.load(sys.stdin)
-    print(data.get('cwd', ''))
+    cfg = json.load(open(sys.argv[1]))
+    print(cfg.get('han_solo_url', ''))
 except Exception:
     print('')
-" <<< "$input" 2>/dev/null)
+" "$CONFIG" 2>/dev/null)
 
-# --- Always-on injection ---
-if [[ -f "$ALWAYS_ON" ]]; then
-    echo "## FRAMEWORK — ALWAYS ON"
-    echo ""
-    cat "$ALWAYS_ON"
-    echo ""
-    echo "---"
-    echo ""
-    debug_always_on="yes"
-fi
-
-# --- Phase-active injection ---
-PHASE_FILE="$cwd/docs/continuity/current-phase.md"
-
-if [[ -z "$cwd" || ! -f "$PHASE_FILE" ]]; then
-    echo "[$timestamp] always-on:$debug_always_on phase:$debug_phase tier:$debug_tier" > "$DEBUG_LOG"
-    exit 0
-fi
-
-# Extract phase name from "**Phase:** Design Review" pattern
-phase_raw=$(/usr/bin/python3 -c "
-import sys, re
+    han_solo_token=$(/usr/bin/python3 -c "
+import sys, json
 try:
-    content = open(sys.argv[1]).read()
-    match = re.search(r'\*\*Phase:\*\*\s*(.+)', content)
-    print(match.group(1).strip() if match else '')
+    cfg = json.load(open(sys.argv[1]))
+    print(cfg.get('han_solo_token', ''))
 except Exception:
     print('')
-" "$PHASE_FILE" 2>/dev/null)
-
-if [[ -z "$phase_raw" ]]; then
-    echo "[$timestamp] always-on:$debug_always_on phase:$debug_phase tier:$debug_tier" > "$DEBUG_LOG"
-    exit 0
+" "$CONFIG" 2>/dev/null)
 fi
 
-# Map phase display name to skill slug
-skill_slug=$(/usr/bin/python3 -c "
-import sys
-phase = sys.argv[1].lower()
-mapping = {
-    'brainstorming': 'brainstorming',
-    'brainstorm': 'brainstorming',
-    'discover': 'discover',
-    'discovery': 'discover',
-    'tech context': 'tech-context',
-    'design sprint': 'design-sprint',
-    'data scaffold': 'data-scaffold',
-    'design review': 'design-review',
-    'prd to plan': 'prd-to-plan',
-    'plan': 'prd-to-plan',
-    'to issues': 'to-issues',
-    'build': 'solo-build',
-    'autopilot': 'autopilot',
-    'qa': 'solo-qa',
-    'phase test': 'phase-test',
-    'deploy': 'deploy',
-}
-print(mapping.get(phase, ''))
-" "$phase_raw" 2>/dev/null)
-
-if [[ -z "$skill_slug" ]]; then
-    echo "[$timestamp] always-on:$debug_always_on phase:$debug_phase tier:$debug_tier" > "$DEBUG_LOG"
-    exit 0
-fi
-
-echo "## FRAMEWORK — ACTIVE PHASE: $phase_raw"
-echo ""
-debug_phase="$skill_slug"
-
-# --- Tier selection: cloud first, then local file ---
-if [[ -n "$HAN_SOLO_TOKEN" ]]; then
-    skill_content=$(curl -sf --max-time 5 \
-        -H "Authorization: Bearer $HAN_SOLO_TOKEN" \
-        "$HAN_SOLO_URL/api/skills/$skill_slug" \
+# fetch_content <project_slug> <content_type> — echoes the DB content (may be empty
+# on a miss or on DB-unreachable). curl -sf --max-time 5 so an unreachable server
+# degrades to empty rather than hanging or erroring.
+fetch_content() {
+    local slug="$1" ctype="$2"
+    if [[ -z "$han_solo_url" || -z "$han_solo_token" ]]; then
+        return 0
+    fi
+    curl -sf --max-time 5 \
+        -H "Authorization: Bearer $han_solo_token" \
+        "$han_solo_url/api/framework/project-content?project_slug=$slug&content_type=$ctype" \
         | /usr/bin/python3 -c "
 import sys, json
 try:
@@ -124,26 +82,87 @@ try:
     print(data.get('content', ''))
 except Exception:
     print('')
-" 2>/dev/null)
+" 2>/dev/null
+}
 
-    if [[ -n "$skill_content" ]]; then
-        echo "$skill_content"
-        echo ""
-        debug_tier="cloud"
-        echo "[$timestamp] always-on:$debug_always_on phase:$debug_phase tier:$debug_tier" > "$DEBUG_LOG"
-        exit 0
+# fetch_skill <slug> — echoes the phase-skill content from the skills endpoint.
+fetch_skill() {
+    local slug="$1"
+    if [[ -z "$han_solo_url" || -z "$han_solo_token" ]]; then
+        return 0
     fi
-    debug_tier="cloud-failed"
-fi
+    curl -sf --max-time 5 \
+        -H "Authorization: Bearer $han_solo_token" \
+        "$han_solo_url/api/skills/$slug" \
+        | /usr/bin/python3 -c "
+import sys, json
+try:
+    data = json.load(sys.stdin)
+    print(data.get('content', ''))
+except Exception:
+    print('')
+" 2>/dev/null
+}
 
-# File tier fallback
-SKILL_FILE="$FRAMEWORK_DIR/skills/$skill_slug/SKILL.md"
-
-if [[ -f "$SKILL_FILE" ]]; then
-    cat "$SKILL_FILE"
+# --- Always-on injection (UNCONDITIONAL, every message, before any early exit) ---
+always_on=$(fetch_content "default" "always-on")
+if [[ -n "$always_on" ]]; then
+    echo "## FRAMEWORK — ALWAYS ON"
     echo ""
-    debug_tier="file"
+    echo "$always_on"
+    echo ""
+    echo "---"
+    echo ""
+    debug_always_on="yes"
 fi
 
-echo "[$timestamp] always-on:$debug_always_on phase:$debug_phase tier:$debug_tier" > "$DEBUG_LOG"
+# --- Phase injection (marker-gated, dormant until Workstream C) ---
+# The marker file's CONTENTS are the project_slug. Absent or empty marker = no
+# phase injection (factory-safe). There is no marker-setter yet, so this branch is
+# inert in normal operation.
+if [[ -s "$MARKER" ]]; then
+    project_slug=$(head -n1 "$MARKER" 2>/dev/null | tr -d '[:space:]')
+    if [[ -n "$project_slug" ]]; then
+        phase_content=$(fetch_content "$project_slug" "current-phase")
+        if [[ -n "$phase_content" ]]; then
+            echo "## FRAMEWORK — CURRENT PHASE"
+            echo ""
+            echo "$phase_content"
+            echo ""
+            debug_phase="$project_slug"
+
+            # The current-phase content names the active phase skill on its first
+            # line (slug). Fetch and inject that skill from the DB; no local
+            # fallback — fail loud on a miss.
+            phase_skill_slug=$(echo "$phase_content" | head -n1 | tr -d '[:space:]')
+            if [[ -n "$phase_skill_slug" ]]; then
+                skill_content=$(fetch_skill "$phase_skill_slug")
+                if [[ -n "$skill_content" ]]; then
+                    echo "$skill_content"
+                    echo ""
+                    debug_phase_tier="db"
+                else
+                    # FAIL LOUD: DB reachable for current-phase but the phase skill
+                    # did not resolve. Never silently serve a local file (removed).
+                    echo "## FRAMEWORK — PHASE SKILL UNAVAILABLE"
+                    echo ""
+                    echo "Phase skill '$phase_skill_slug' could not be loaded from the Han Solo DB (project '$project_slug'). No local fallback exists. Resolve the DB/skill before relying on phase guidance."
+                    echo ""
+                    debug_phase_tier="db-fail-loud"
+                fi
+            fi
+        else
+            # Marker is set with a slug but the DB returned no current-phase content.
+            # Fail loud rather than silently proceeding with no phase guidance.
+            echo "## FRAMEWORK — CURRENT PHASE UNAVAILABLE"
+            echo ""
+            echo "Framework marker is active for project '$project_slug' but no current-phase content was returned by the Han Solo DB. No local fallback exists. Resolve the DB before relying on phase guidance."
+            echo ""
+            debug_phase="$project_slug"
+            debug_phase_tier="db-fail-loud"
+        fi
+    fi
+fi
+
+echo "[$timestamp] always-on:$debug_always_on phase:$debug_phase phase_tier:$debug_phase_tier" > "$DEBUG_LOG"
 exit 0

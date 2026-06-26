@@ -36,10 +36,14 @@ significant or destructive actions, describe first, then proceed.
   wants a Han Solo change, it goes to Scott, who builds it with the team.
 - Register new framework projects in ~/Developer/Framework Vers1/projects.md.
 
-## Framework — Start Routing
-New project/feature conversations → follow
-~/Developer/Framework Vers1/skills/start/SKILL.md. One sentence of orientation,
-then start. Never announce phases.
+## Framework — how content reaches you
+The Han Solo connector (this plugin) injects framework content from the Framework
+DB at runtime — there are no local skill files to read and no offline fallback.
+- **Always-on** — the framework output contract is fetched from the DB and
+  injected on every message, automatically.
+- **Phase content** — when a framework project is active (the connector's marker
+  is set), the project's current-phase content and phase skill are fetched live
+  from the DB and injected. Project-driven; there is nothing for you to open.
 
 ## Framework — Output Contract
 Voice: plain language, direct, framework invisible — never announce internal
@@ -47,18 +51,9 @@ routing. Never expose skill names, abbreviations, phase announcements, or hand
 over file paths / terminal commands to run. Slice IDs always labeled "unit of
 work SL-001." Match response weight to the moment; close with what's next.
 
-## Framework
-Playbook root: ~/Developer/Framework Vers1
-
-Session modes — default is bare (no routing):
-- "guided mode" → read ~/Developer/Framework Vers1/skills/start/SKILL.md
-- "piloted mode" → load always-on skills once, wait for manual phase invocation
-- "bare mode" → return to default
-
-Always-on skills (fire on guided or piloted):
-- ~/Developer/Framework Vers1/skills/process-mapper/SKILL.md
-- ~/Developer/Framework Vers1/skills/product-continuity/SKILL.md
-- ~/Developer/Framework Vers1/skills/framework-health/SKILL.md
-- ~/Developer/Framework Vers1/skills/retrospective/SKILL.md
-
-Skills directory: ~/Developer/Framework Vers1/skills/
+## Connector — install / reinstall
+The plugin is the canonical source of the hook. Install via the two `/plugin`
+commands in the README. On a machine that invokes the hook by absolute path
+(rather than through the plugin), pull this repo and run `zsh scripts/install.sh`
+to reconcile `~/.claude/hooks` from the plugin. Your url + token live in
+`~/.claude/hooks/framework-config.json`; the install never touches it.
